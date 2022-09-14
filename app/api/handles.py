@@ -49,34 +49,25 @@ async def delete_handle(request: web.Request, context: AppContext) -> web.Respon
 
         date = request.rel_url.query['date']
 
-        print(request.url)
-        if check.check_item_id(data):
-            if check.datetime_valid(date):
-                if await dbo.already_in_the_database(context, data):
-                    if await dbo.delete_element(context, data, date):
-                        return web.json_response(
-                            {
-                                "code": 200,
-                                "message": ""  # TODO: message
-                            },
-                            status=200
-                        )
-                else:
+        if check.check_item_id(data) and check.datetime_valid(date):
+            if await dbo.already_in_the_database(context, data):
+                if await dbo.delete_element(context, data, date):
                     return web.json_response(
                         {
-                            "code": 404,
-                            "message": "File not found"
+                            "code": 200,
+                            "message": ""  # TODO: message
                         },
-                        status=404
+                        status=200
                     )
             else:
                 return web.json_response(
                     {
-                        "code": 400,
-                        "message": "Validation Failed"
+                        "code": 404,
+                        "message": "File not found"
                     },
-                    status=400
+                    status=404
                 )
+
         else:
             return web.json_response(
                 {

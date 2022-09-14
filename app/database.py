@@ -21,13 +21,14 @@ async def get_last_update(context: AppContext, item_id):
 
 async def update_item(context: AppContext, item_type, item_id, url, parentId, size, date):
     parentId = 'Null' if parentId is None else "'" + str(parentId) + "'"
-    size = 'Null' if size is None else 0
+    size = 'Null' if size is None else size
     if item_type == 'FILE':
-        script = f"update item set url = '{url}', parentId = '{parentId}', size = {size} where id = '{item_id}' "
+        script = f"update item set url = '{url}', parentId = {parentId}, size = {size} where id = '{item_id}' "
         await context.db.fetch(script)
         await create_history(context, item_id, date, 'Update file')
     if item_type == 'FOLDER':
         script = f"update item set parentId = {parentId}, size = {size} where id = '{item_id}' "
+        print(script)
         await context.db.fetch(script)
         await create_history(context, item_id, date, 'Update folder')
 
@@ -116,10 +117,7 @@ async def delete_file_in_folder(context: AppContext, item_id, delta_size, parent
 
     # TODO: А если в минус уйдем?
     await update_folders_after_change_item(context, parentId, folder_size - delta_size, 0 - delta_size, date)
-
-    await delete_from_history(context, item_id)
-    script = f"delete from item where id = '{item_id}'"
-    await context.db.fetch(script)
+    await delete_item(context, item_id)
 
 
 async def get_items_in_folder(context: AppContext, parent_Id):
@@ -130,7 +128,7 @@ async def get_items_in_folder(context: AppContext, parent_Id):
 
 async def delete_items_from_folder(context: AppContext, parent_Id):
     # Решение, на самом деле сомнительное, но нам надо удалить историю всех файлов, перед тем как их удалять
-    items = (await get_items_in_folder(context, parent_Id))
+    items = await get_items_in_folder(context, parent_Id)
     for item in items:
 
         # Рекурсия нужна для удаления папок внутри папок
@@ -143,42 +141,45 @@ async def delete_items_from_folder(context: AppContext, parent_Id):
     await context.db.fetch(script)
 
 
-async def move_item(context: AppContext, item_old_parent_Id, item_id, item_new_parent_Id, url, date):
-    # Проверка на то есть ли уже такая папка
+async def move_item(context: AppContext, item_id, item_new_parent_Id, url, date):
+    # Данные Item в бд
     item_in_database = await get_item(context, item_id)
-    if len(item_in_database) > 0:
 
-        item_size = await get_item_size(context, item_id)
-        # Если папку перемещают
-        if item_in_database[0]['parentid'] != item_new_parent_Id:
+    item_size = await get_item_size(context, item_id)
+    print('item size', item_size)
+    print('item id', item_id)
+    print('item_new_parent_Id', item_new_parent_Id)
+    # Если item перемещают
+    if item_in_database[0]['parentid'] != item_new_parent_Id:
 
-            # Изменяем вес старой родительской папки
-            parent_folder_size = await get_item_size(context, item_in_database[0]['parentid'])
-            await update_folders_after_change_item(context, item_in_database[0]['parentid'],
-                                                   parent_folder_size - item_size, 0 - item_size, date)
+        # Изменяем вес старой родительской папки
+        parent_folder_size = await get_item_size(context, item_in_database[0]['parentid'])
+        await update_folders_after_change_item(context, item_in_database[0]['parentid'],
+                                               parent_folder_size - item_size, 0 - item_size, date)
 
-            # Если её перемещают в другую папку
-            if item_new_parent_Id is not None:
+        # Если её перемещают в другую папку
+        if item_new_parent_Id is not None:
 
-                new_parent_folder_size = await get_item_size(context, item_new_parent_Id)
+            new_parent_folder_size = await get_item_size(context, item_new_parent_Id)
 
-                # Изменить вес родительской папки
-                await update_folders_after_change_item(context, item_new_parent_Id,
-                                                       new_parent_folder_size + item_size,
-                                                       item_size, date)
+            # Изменить вес родительской папки
+            await update_folders_after_change_item(context, item_new_parent_Id,
+                                                   new_parent_folder_size + item_size,
+                                                   item_size, date)
 
-                # Изменить сам item
-                await update_item(context, item_in_database[0]['type'], item_id, url, item_new_parent_Id, item_size,
-                                  date)
+            # Изменить сам item
+            print('size 174 строка', item_size)
+            await update_item(context, item_in_database[0]['type'], item_id, url, item_new_parent_Id, item_size,
+                              date)
 
-                # Если её перемещают в корневую директорию
-            else:
-                await update_item(context, item_in_database[0]['type'], item_id, url, 'Null', item_size,
-                                  date)
+            # Если её перемещают в корневую директорию
+        else:
+            print('size 180 строка', item_size)
+            await update_item(context, item_in_database[0]['type'], item_id, url, None, item_size,
+                              date)
 
 
-async def import_items(context: AppContext, data):  # -> tp.List[models.Item]:
-
+async def import_items(context: AppContext, data):
     # TODO: Если добавляемыъ элементов нет в бд, то расчитать на этом берегу веса, чтобы не было рекурсивных запросов
     #  в бд
 
@@ -187,6 +188,7 @@ async def import_items(context: AppContext, data):  # -> tp.List[models.Item]:
     folders = []
     files = []
 
+    # TODO: Что будет если папки ссылаются друг на друга? (400 Надо обработать)
     # Разделяем файлы и папки
     for item in data['items']:
         if item['type'] == 'FOLDER':
@@ -204,43 +206,17 @@ async def import_items(context: AppContext, data):  # -> tp.List[models.Item]:
             return False
 
     for folder in folders:
-        folder_id = folder['id']
-        new_folder_parentId = folder['parentId']
-        await move_item(context,)
-        # Проверка на то есть ли уже такая папка
-        folder_in_database = await get_item(context, folder_id)
-        if len(folder_in_database) > 0:
 
-            folder_size = await get_item_size(context, folder_id)
-            # Если папку перемещают
-            if folder_in_database[0]['parentid'] != new_folder_parentId:
+        # Если родитель родителя та папка, которую импортируют. (проверка на цикл)
+        print()
+        if (await get_parentId(context, folder['parentId']))[0]['parentid'] == folder['id']:
+            return False
 
-                # Изменяем вес старой родительской папки
-                parent_folder_size = await get_item_size(context, folder_in_database[0]['parentid'])
-                await update_folders_after_change_item(context, folder_in_database[0]['parentid'],
-                                                       parent_folder_size - folder_size, 0 - folder_size, date)
-
-                # Если её перемещают в другую папку
-                if new_folder_parentId is not None:
-
-                    new_parent_folder_size = await get_item_size(context, new_folder_parentId)
-                    print("new_folder_parentId", new_folder_parentId)
-
-                    # Изменить вес родительской папки
-                    await update_folders_after_change_item(context, new_folder_parentId,
-                                                           new_parent_folder_size + folder_size,
-                                                           folder_size, date)
-
-                    # Изменить саму папку
-                    await update_folder(context, folder_id, new_folder_parentId, folder_size, date)
-
-                    # Если её перемещают в корневую директорию
-                else:
-                    await update_folder(context, folder_id, new_folder_parentId, folder_size, date)
-
+        if await already_in_the_database(context, folder['id']):
+            await move_item(context, folder['id'], folder['parentId'], None, date)
             continue
 
-        await create_folder(context, folder_id, new_folder_parentId, date)
+        await create_folder(context, folder['id'], folder['parentId'], date)
 
     for file in files:
         file_id = file['id']
@@ -248,29 +224,21 @@ async def import_items(context: AppContext, data):  # -> tp.List[models.Item]:
         parentId = file['parentId']
         size = file['size']
 
+        print(file_id, parentId, size)
+
         # Проверка на то есть ли уже такой файл
         if await already_in_the_database(context, file_id):
-            await update_file(context, file_id, url, parentId, size, date)
-
-            # Обновить вес папки при обновлении файла
-            if parentId is not None:
-
-                old_file_size = await get_item_size(context, file_id)
-                delta_size = size - old_file_size
-
-                if delta_size != 0:
-                    folder_size = await get_item_size(context, parentId)
-                    await update_folders_after_change_item(context, parentId, folder_size + delta_size, delta_size,
-                                                           date)
-                # await update_folder(context, parentId, folder_size + int(size))
-                # await create_history(context, parentId, 'Update', date)
-
+            await move_item(context, file['id'], file['parentId'], file['url'], date)
             continue
-
         # Обновить вес папки при добавлении файла
         if parentId is not None:
-            folder_size = await get_item_size(context, parentId)
-            await update_folders_after_change_item(context, parentId, folder_size + size, size, date)
+            old_file_size = await get_item_size(context, file_id)
+            delta_size = size - old_file_size
+
+            if delta_size != 0:
+                folder_size = await get_item_size(context, parentId)
+                await update_folders_after_change_item(context, parentId, folder_size + delta_size, delta_size,
+                                                       date)
 
         await create_file(context, file_id, url, parentId, size, date)
 
@@ -291,10 +259,15 @@ async def delete_element(context: AppContext, data, date):
         if len(await get_items_in_folder(context, item['id'])) > 0:
             await delete_items_from_folder(context, item['id'])
             await delete_item(context, item['id'])
-
         # Если папка пустая, просто удаляем папку
         else:
             await delete_item(context, item['id'])
+
+        if item['parentid'] is not None:
+            if item['size'] != 0:
+                folder_size = await get_item_size(context, item['parentid'])
+                await update_folders_after_change_item(context, item['parentid'], folder_size - item['size'], -item['size'],
+                                                       date)
     return True
 
 

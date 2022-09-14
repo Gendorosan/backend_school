@@ -35,6 +35,9 @@ def check_json(data):
 
         items_id.append(item['id'])
 
+        # Папка не может быть своим родителем
+        if item['type'] == "FOLDER" and item['parentId'] == item['id']:
+            return False
 
         # TODO: Убрать?
         if item['type'] == 'FOLDER':
