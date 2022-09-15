@@ -19,6 +19,7 @@ sudo docker-compose up -d
 Далее необходимо подключиться к бд и создать таблицы
 
 sudo psql -h 0.0.0.0 -d MyLittleYandexDisk -U postgres -p 5432
+
 password = ' ' - Пароль пробел
 
 create table if not exists item
