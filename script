@@ -17,9 +17,3 @@ create table if not exists history
     primary key (id),
     foreign key (itemId) references item(id)
 );
-
-drop table item cascade;
-drop table history cascade;
-select * from item;
-select * from history;
-truncate table item cascade;

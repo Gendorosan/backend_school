@@ -28,7 +28,8 @@ def parse_args():
 
 def main():
     app = asyncio.get_event_loop().run_until_complete(create_app())
-    web.run_app(app)
+    web.run_app(app, port=80)
+
 
 if __name__ == '__main__':
     main()
