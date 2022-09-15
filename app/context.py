@@ -10,7 +10,7 @@ class AppContext:
         )
 
     async def on_startup(self, app=None):
-        self.db = await asyncpg.create_pool(dsn='postgresql://postgres:postgres123@postgres:5432/MyLittleYandexDisk')
+        self.db = await asyncpg.create_pool(dsn='postgresql:// :postgres123@postgres:5432/MyLittleYandexDisk')
 
     async def on_shutdown(self, app=None):
         if self.db:
