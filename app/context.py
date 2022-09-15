@@ -13,7 +13,7 @@ class AppContext:
         self.db = await asyncpg.create_pool(user='postgres',
                                             password=' ',
                                             host='0.0.0.0',
-                                            dsn='postgresql://localhost:5432/MyLittleYandexDisk')
+                                            dsn='postgresql://0.0.0.0:5432/MyLittleYandexDisk')
 
     async def on_shutdown(self, app=None):
         if self.db:
