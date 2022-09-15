@@ -8,7 +8,9 @@ sudo docker-compose up -d
 
 1. Клонировать репозиторий
 git clone https://github.com/Gendorosan/backend_school.git
+
 user: gendorosan
+
 password: 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
 
 2. Создать docker-compose
