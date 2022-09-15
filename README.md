@@ -23,7 +23,7 @@ sudo docker-compose up -d
 
 sudo psql -h 0.0.0.0 -d MyLittleYandexDisk -U postgres -p 5432
 
-password = ' ' - Пароль пробел
+password = ' ' - Пароль пробел (без кавычек)
 
 create table if not exists item
 (
