@@ -1,7 +1,3 @@
-# Конекст нужен для реализации паттерна проектирования - декоратор (функция, которая возвращает функцию) в питоне @
-
-import typing as tp
-
 import asyncpg
 
 from app.utils import secrets

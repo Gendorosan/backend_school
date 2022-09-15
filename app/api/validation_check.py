@@ -54,7 +54,7 @@ def check_json(data):
 
 def check_item_id(item_id):
     # поле id не может быть равно null
-    if item_id is None:
+    if item_id is None or item_id == 'None':
         return False
 
     return not_sql_injection(item_id)

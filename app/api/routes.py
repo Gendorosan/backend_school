@@ -1,5 +1,4 @@
 from aiohttp import web
-
 from app.api import handles
 from app.context import AppContext
 
@@ -12,7 +11,6 @@ def wrap_handler(handler, context):
     return wrapper
 
 
-# app: передаем наше приложение #ctx: передаем наш контекст
 def setup_routes(app: web.Application, ctx: AppContext) -> None:
     app.router.add_post(
         '/imports',

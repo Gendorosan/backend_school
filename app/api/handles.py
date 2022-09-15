@@ -10,7 +10,6 @@ async def post_request_content(request: web.Request):
     return text
 
 
-# TODO: Нормальные return сделать
 async def import_handle(request: web.Request, context: AppContext) -> web.Response:
     try:
         data = await post_request_content(request)
@@ -20,7 +19,7 @@ async def import_handle(request: web.Request, context: AppContext) -> web.Respon
                 return web.json_response(
                     {
                         "code": 200,
-                        "message": ""  # TODO: message
+                        "message": "Import was successful"
                     },
                     status=200
                 )
@@ -33,7 +32,7 @@ async def import_handle(request: web.Request, context: AppContext) -> web.Respon
             status=400
         )
 
-    except TimeoutError:
+    except SyntaxError:
         return web.json_response(
             {
                 "code": 400,
@@ -55,7 +54,7 @@ async def delete_handle(request: web.Request, context: AppContext) -> web.Respon
                     return web.json_response(
                         {
                             "code": 200,
-                            "message": ""  # TODO: message
+                            "message": "The data was successfully deleted"
                         },
                         status=200
                     )
@@ -76,7 +75,7 @@ async def delete_handle(request: web.Request, context: AppContext) -> web.Respon
                 },
                 status=400
             )
-    except TimeoutError:
+    except SyntaxError:
         return web.json_response(
             {
                 "code": 400,
@@ -93,7 +92,7 @@ async def get_nodes_handle(request: web.Request, context: AppContext) -> web.Res
             if await dbo.already_in_the_database(context, data):
                 print('already_in_the_database')
                 return web.json_response(
-                        await dbo.get_nodes(context, data)
+                    await dbo.get_nodes(context, data)
                 )
 
             else:
@@ -113,7 +112,7 @@ async def get_nodes_handle(request: web.Request, context: AppContext) -> web.Res
                 },
                 status=400
             )
-    except TimeoutError:
+    except SyntaxError:
         return web.json_response(
             {
                 "code": 400,
@@ -139,7 +138,7 @@ async def get_updates_handle(request: web.Request, context: AppContext) -> web.R
                 status=400
             )
 
-    except TimeoutError:
+    except SyntaxError:
         return web.json_response(
             {
                 "code": 400,
@@ -167,7 +166,7 @@ async def get_node_history_handle(request: web.Request, context: AppContext) -> 
                 status=400
             )
 
-    except TimeoutError:
+    except SyntaxError:
         return web.json_response(
             {
                 "code": 400,

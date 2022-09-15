@@ -1,16 +1,12 @@
-import typing as tp
-
 from app.context import AppContext
 from datetime import datetime, timedelta
 import dateutil.parser
 
 
-# TODO: Транзакции
-
 async def get_parentId(context: AppContext, item_id):
     script = f"select parentid from item where id = '{item_id}'"
     parentId = await context.db.fetch(script)
-    return parentId
+    return parentId[0]['parentid'] if len(parentId) > 0 else None
 
 
 async def get_last_update(context: AppContext, item_id):
@@ -28,24 +24,21 @@ async def update_item(context: AppContext, item_type, item_id, url, parentId, si
         await create_history(context, item_id, date, 'Update file')
     if item_type == 'FOLDER':
         script = f"update item set parentId = {parentId}, size = {size} where id = '{item_id}' "
-        print(script)
         await context.db.fetch(script)
         await create_history(context, item_id, date, 'Update folder')
 
 
-# TODO: А если передается только папка? Не должны ли мы её очистить?
-# TODO: Если добавляемыъ элементов нет в бд, то расчитать на этом берегу веса, чтобы не было рекурсивных запросов в бд
-
 async def update_folders_after_change_item(context: AppContext, folder_id, size, delta_size, date):
     script = f"update item set size = {size} where id = '{folder_id}' "
     folder_parentId = await get_parentId(context, folder_id)
-    if len(folder_parentId) > 0:
-        parent_folder_size = await get_item_size(context, folder_parentId[0]['parentid'])
-        await update_folders_after_change_item(context, folder_parentId[0]['parentid'],
+    if folder_parentId is not None:
+        parent_folder_size = await get_item_size(context, folder_parentId)
+        await update_folders_after_change_item(context, folder_parentId,
                                                parent_folder_size + delta_size,
                                                delta_size, date)
         await create_history(context, folder_id, date, 'Update folder')
 
+    await create_history(context, folder_id, date, 'Update folder')
     await context.db.fetch(script)
 
 
@@ -115,7 +108,6 @@ async def delete_item(context: AppContext, item_id):
 async def delete_file_in_folder(context: AppContext, item_id, delta_size, parentId, date):
     folder_size = await get_item_size(context, parentId)
 
-    # TODO: А если в минус уйдем?
     await update_folders_after_change_item(context, parentId, folder_size - delta_size, 0 - delta_size, date)
     await delete_item(context, item_id)
 
@@ -146,9 +138,7 @@ async def move_item(context: AppContext, item_id, item_new_parent_Id, url, date)
     item_in_database = await get_item(context, item_id)
 
     item_size = await get_item_size(context, item_id)
-    print('item size', item_size)
-    print('item id', item_id)
-    print('item_new_parent_Id', item_new_parent_Id)
+
     # Если item перемещают
     if item_in_database[0]['parentid'] != item_new_parent_Id:
 
@@ -180,15 +170,10 @@ async def move_item(context: AppContext, item_id, item_new_parent_Id, url, date)
 
 
 async def import_items(context: AppContext, data):
-    # TODO: Если добавляемыъ элементов нет в бд, то расчитать на этом берегу веса, чтобы не было рекурсивных запросов
-    #  в бд
-
-    # TODO: Что делать с файлом, который пытаются добавить в папку, которой нет? (код 400, уже сделано)
     date = data['updateDate']
     folders = []
     files = []
 
-    # TODO: Что будет если папки ссылаются друг на друга? (400 Надо обработать)
     # Разделяем файлы и папки
     for item in data['items']:
         if item['type'] == 'FOLDER':
@@ -208,8 +193,7 @@ async def import_items(context: AppContext, data):
     for folder in folders:
 
         # Если родитель родителя та папка, которую импортируют. (проверка на цикл)
-        print()
-        if (await get_parentId(context, folder['parentId']))[0]['parentid'] == folder['id']:
+        if await get_parentId(context, folder['parentId']) == folder['id']:
             return False
 
         if await already_in_the_database(context, folder['id']):
@@ -223,8 +207,6 @@ async def import_items(context: AppContext, data):
         url = file['url']
         parentId = file['parentId']
         size = file['size']
-
-        print(file_id, parentId, size)
 
         # Проверка на то есть ли уже такой файл
         if await already_in_the_database(context, file_id):
@@ -246,8 +228,6 @@ async def import_items(context: AppContext, data):
 
 
 async def delete_element(context: AppContext, data, date):
-    print(date)
-
     item = (await get_item(context, data))[0]
 
     if item['type'] == 'FILE':
@@ -266,7 +246,8 @@ async def delete_element(context: AppContext, data, date):
         if item['parentid'] is not None:
             if item['size'] != 0:
                 folder_size = await get_item_size(context, item['parentid'])
-                await update_folders_after_change_item(context, item['parentid'], folder_size - item['size'], -item['size'],
+                await update_folders_after_change_item(context, item['parentid'], folder_size - item['size'],
+                                                       -item['size'],
                                                        date)
     return True
 
@@ -287,7 +268,6 @@ async def get_nodes(context: AppContext, data):
 
     if item['type'] == 'FOLDER':
         final_dict = await create_nodes_dict(context, item)
-        print(final_dict)
         return final_dict
 
 
@@ -328,7 +308,7 @@ async def create_nodes_dict(context: AppContext, item):
                 'parentId': item['parentid'],
                 'date': await get_last_update(context, item['id']),
                 'size': item['size'],
-                'children': None
+                'children': []
             }
 
 
@@ -336,7 +316,7 @@ async def get_items_updated_in_last_day(context: AppContext, date):
     end_date = dateutil.parser.parse(date)
     start_date = end_date - timedelta(days=1)
 
-    items = await get_files_updated_in_piece(context, start_date, end_date)
+    items = await get_files_updated_in_snippet(context, start_date, end_date)
 
     updated_files = []
     for item in items:
@@ -353,7 +333,7 @@ async def get_items_updated_in_last_day(context: AppContext, date):
     return updated_files
 
 
-async def get_files_updated_in_piece(context: AppContext, start_date, end_date):
+async def get_files_updated_in_snippet(context: AppContext, start_date, end_date):
     script = f"select distinct itemId, date from history where date >= '{start_date}' and date <= '{end_date}'"
     return await context.db.fetch(script)
 
